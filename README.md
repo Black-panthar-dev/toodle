@@ -1,5 +1,10 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Project Docs
+
+Current product scope and technical requirements are saved in [docs/requirements.md](/Users/apple/Documents/toodle/docs/requirements.md).
+Saved design references are listed in [docs/designs.md](/Users/apple/Documents/toodle/docs/designs.md).
+
 ## Getting Started
 
 First, run the development server:

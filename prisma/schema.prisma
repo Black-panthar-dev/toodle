@@ -1,0 +1,265 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  SUPER_ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum LessonStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PaymentMethod {
+  JAZZCASH
+  EASYPAISA
+  BANK_TRANSFER
+  CARD_PAYMENT
+  OTHER
+}
+
+model User {
+  id                  String               @id @default(cuid())
+  name                String?
+  email               String?              @unique
+  emailVerified       DateTime?
+  image               String?
+  phone               String?              @unique
+  passwordHash        String?
+  role                Role                 @default(STUDENT)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  accounts            Account[]
+  sessions            Session[]
+  taughtCourses       Course[]             @relation("CourseTeacher")
+  enrollments         Enrollment[]
+  payments            Payment[]            @relation("StudentPayments")
+  reviewedPayments    Payment[]            @relation("PaymentReviewer")
+  subscriptions       Subscription[]
+  lessonProgress      LessonProgress[]
+  passwordResetTokens PasswordResetToken[]
+}
+
+model Course {
+  id           String       @id @default(cuid())
+  title        String
+  slug         String       @unique
+  description  String
+  category     String
+  level        String
+  thumbnailUrl String?
+  duration     String
+  teacherId    String?
+  status       CourseStatus @default(DRAFT)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  teacher      User?        @relation("CourseTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
+  lessons      Lesson[]
+  enrollments  Enrollment[]
+
+  @@index([teacherId])
+  @@index([status])
+}
+
+model Lesson {
+  id          String         @id @default(cuid())
+  courseId    String
+  title       String
+  slug        String
+  summary     String?
+  content     String?
+  materialUrl String?
+  position    Int
+  status      LessonStatus   @default(DRAFT)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  course      Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  progress    LessonProgress[]
+
+  @@unique([courseId, slug])
+  @@unique([courseId, position])
+  @@index([courseId, status])
+}
+
+model Enrollment {
+  id        String           @id @default(cuid())
+  studentId String
+  courseId  String
+  status    EnrollmentStatus @default(ACTIVE)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  student   User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course    Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, courseId])
+  @@index([courseId, status])
+  @@index([studentId, status])
+}
+
+model MembershipPlan {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  durationLabel String
+  durationDays  Int
+  price         Decimal        @db.Decimal(10, 2)
+  currency      String         @default("PKR")
+  isActive      Boolean        @default(true)
+  description   String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  payments      Payment[]
+  subscriptions Subscription[]
+}
+
+model Payment {
+  id                   String         @id @default(cuid())
+  studentId            String
+  planId               String
+  reviewedById         String?
+  method               PaymentMethod
+  transactionReference String?
+  proofUrl             String
+  proofFileName        String
+  proofMimeType        String
+  proofFileSize        Int
+  status               PaymentStatus  @default(PENDING)
+  planNameSnapshot     String
+  planDurationSnapshot String
+  planPriceSnapshot    Decimal        @db.Decimal(10, 2)
+  currency             String         @default("PKR")
+  amount               Decimal        @db.Decimal(10, 2)
+  submittedAt          DateTime       @default(now())
+  approvedAt           DateTime?
+  rejectedAt           DateTime?
+  rejectionReason      String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  student              User           @relation("StudentPayments", fields: [studentId], references: [id], onDelete: Cascade)
+  plan                 MembershipPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  reviewedBy           User?          @relation("PaymentReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  subscription         Subscription?
+
+  @@index([studentId, status])
+  @@index([status, approvedAt])
+  @@index([planId])
+}
+
+model Subscription {
+  id        String             @id @default(cuid())
+  studentId String
+  planId    String
+  paymentId String?            @unique
+  status    SubscriptionStatus @default(PENDING)
+  startDate DateTime?
+  endDate   DateTime?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  student   User               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  plan      MembershipPlan     @relation(fields: [planId], references: [id], onDelete: Restrict)
+  payment   Payment?           @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([studentId, status, endDate])
+  @@index([planId])
+}
+
+model LessonProgress {
+  id              String   @id @default(cuid())
+  studentId       String
+  lessonId        String
+  progressPercent Int      @default(0)
+  startedAt       DateTime?
+  lastAccessedAt  DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  student         User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lesson          Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, lessonId])
+  @@index([studentId, completedAt])
+  @@index([lessonId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([sessionToken])
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
